@@ -104,11 +104,32 @@
         const modalMessage = document.getElementById('modalMessage');
         const modalCloseButton = document.getElementById('modalCloseButton');
 
+        // --- Initial Setup ---
+        window.onload = function() {
+            prepopulateDates();
+        };
+
         // --- Event Listeners ---
         fetchButton.addEventListener('click', fetchGames);
         modalCloseButton.addEventListener('click', () => modal.classList.add('hidden'));
 
         // --- Functions ---
+        function prepopulateDates() {
+            const today = new Date();
+            const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+            const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+
+            const formatDate = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            startDateInput.value = formatDate(lastMonthStart);
+            endDateInput.value = formatDate(lastMonthEnd);
+        }
+
         function showMessage(msg, isError = false) {
             messageDiv.textContent = msg;
             messageDiv.className = `text-center font-medium mt-4 ${isError ? 'text-red-500' : 'text-gray-600'}`;
@@ -136,18 +157,15 @@
             fetchButton.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                // Fetch plays from the BGG API (XML format)
                 const playsResponse = await fetch(`${bggApiBaseUrl}/plays?username=${username}&mindate=${startDate}&maxdate=${endDate}`);
                 
                 if (!playsResponse.ok) {
                     throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}.`);
                 }
 
-                // Parse XML response
                 const parser = new DOMParser();
                 const xmlPlaysDoc = parser.parseFromString(await playsResponse.text(), 'text/xml');
                 
-                // Check for API errors or no plays found
                 const errorElement = xmlPlaysDoc.querySelector('error');
                 if (errorElement) {
                     throw new Error(`BGG API Error: ${errorElement.getAttribute('message')}`);
@@ -159,14 +177,12 @@
                     return;
                 }
 
-                // Aggregate play counts by game ID
                 const gamePlays = new Map();
                 plays.forEach(play => {
                     const gameId = play.querySelector('item').getAttribute('objectid');
                     gamePlays.set(gameId, (gamePlays.get(gameId) || 0) + 1);
                 });
 
-                // Fetch stats for all unique games in a single call (BGG API best practice)
                 const gameIds = [...gamePlays.keys()];
                 const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${gameIds.join(',')}&stats=1`);
 
@@ -178,12 +194,18 @@
                 const statsItems = xmlStatsDoc.querySelectorAll('item');
 
                 const allGames = [];
+                let minOwnedCount = Infinity;
+
                 statsItems.forEach(item => {
                     const gameId = item.getAttribute('id');
                     const name = item.querySelector('name').getAttribute('value');
                     const playCount = gamePlays.get(gameId) || 0;
-                    const ownedCount = item.querySelector('status') ? item.querySelector('status').getAttribute('owned') : 'N/A';
+                    const ownedCount = item.querySelector('status') ? parseInt(item.querySelector('status').getAttribute('owned')) : 'N/A';
                     const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
+                    
+                    if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
+                        minOwnedCount = ownedCount;
+                    }
 
                     allGames.push({
                         name,
@@ -193,10 +215,14 @@
                     });
                 });
                 
-                // Sort by play count, descending
-                allGames.sort((a, b) => b.playCount - a.playCount);
+                // Sort by average rating, descending (highest to lowest)
+                allGames.sort((a, b) => {
+                    const ratingA = a.averageRating === 'N/A' ? -1 : a.averageRating;
+                    const ratingB = b.averageRating === 'N/A' ? -1 : b.averageRating;
+                    return ratingB - ratingA;
+                });
 
-                renderResults(allGames);
+                renderResults(allGames, minOwnedCount);
                 showMessage(`Found ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
 
             } catch (error) {
@@ -209,15 +235,22 @@
             }
         }
 
-        function renderResults(games) {
+        function renderResults(games, minOwnedCount) {
             gamesTableBody.innerHTML = '';
             games.forEach(game => {
                 const row = document.createElement('tr');
-                row.className = 'hover:bg-gray-50 transition-colors';
+                let rowClasses = 'hover:bg-gray-50 transition-colors';
+                
+                if (game.ownedCount === minOwnedCount) {
+                    rowClasses += ' bg-yellow-200';
+                }
+
+                row.className = rowClasses;
+
                 row.innerHTML = `
                     <td class="px-4 py-3 font-medium text-gray-900 truncate">${game.name}</td>
                     <td class="px-4 py-3 text-center text-gray-700">${game.playCount}</td>
-                    <td class="px-4 py-3 text-center text-gray-700">${game.ownedCount}</td>
+                    <td class="px-4 py-3 text-center text-gray-700">${game.ownedCount !== 'N/A' ? game.ownedCount.toLocaleString() : 'N/A'}</td>
                     <td class="px-4 py-3 text-center text-gray-700">${game.averageRating !== 'N/A' ? game.averageRating.toFixed(2) : 'N/A'}</td>
                 `;
                 gamesTableBody.appendChild(row);
