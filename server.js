@@ -1,13 +1,20 @@
 const axios = require('axios');
 const xml2js = require('xml2js');
-const cors = require('cors')({ origin: true }); // Vercel handles CORS this way
+const cors = require('cors')({ origin: true });
 
 const BGG_API_URL = 'https://boardgamegeek.com/xmlapi2';
 
-module.exports = async (req, res) => {
-    // Vercel serverless functions do not need app.use for CORS, it is handled directly
-    // by the module.exports function.
-    cors(req, res, async () => {
+// The main serverless function handler
+module.exports = (req, res) => {
+    // Handle CORS pre-flight requests
+    if (req.method === 'OPTIONS') {
+        return cors(req, res, () => {
+            res.status(204).end();
+        });
+    }
+
+    // Handle the actual API requests
+    return cors(req, res, async () => {
         try {
             if (req.url.startsWith('/api/bgg-plays')) {
                 await handlePlays(req, res);
@@ -18,11 +25,14 @@ module.exports = async (req, res) => {
             }
         } catch (error) {
             console.error('Unhandled server error:', error);
+            // This is the key change to prevent the JSON.parse error
+            // Any unhandled exception will now return a proper JSON response
             res.status(500).json({ error: 'An unexpected server error occurred.' });
         }
     });
 };
 
+// Function to handle fetching plays from BGG
 async function handlePlays(req, res) {
     const { username, startDate, endDate } = req.query;
 
@@ -31,7 +41,7 @@ async function handlePlays(req, res) {
     }
 
     try {
-        console.log(`Fetching plays for user: ${username}`);
+        console.log(`Fetching plays for user: ${username} from ${startDate} to ${endDate}`);
         const playsResponse = await axios.get(`${BGG_API_URL}/plays?username=${username}`);
         const playsXml = playsResponse.data;
 
@@ -64,6 +74,7 @@ async function handlePlays(req, res) {
     }
 }
 
+// Function to handle fetching game stats from BGG
 async function handleStats(req, res) {
     const { gameId } = req.query;
 
