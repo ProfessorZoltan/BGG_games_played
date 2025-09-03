@@ -37,7 +37,9 @@
             <div class="flex flex-col sm:flex-row gap-4 items-center">
                 <input id="usernameInput" type="text" placeholder="BGG Username"
                        class="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-                <input id="yearInput" type="number" placeholder="Year (e.g., 2024)"
+                <input id="startDateInput" type="date"
+                       class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                <input id="endDateInput" type="date"
                        class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
             </div>
             <button id="fetchButton"
@@ -93,7 +95,8 @@
 
         // --- DOM Elements ---
         const usernameInput = document.getElementById('usernameInput');
-        const yearInput = document.getElementById('yearInput');
+        const startDateInput = document.getElementById('startDateInput');
+        const endDateInput = document.getElementById('endDateInput');
         const fetchButton = document.getElementById('fetchButton');
         const messageDiv = document.getElementById('message');
         const resultsTable = document.getElementById('resultsTable');
@@ -106,9 +109,6 @@
         // --- Event Listeners ---
         fetchButton.addEventListener('click', fetchGames);
         modalCloseButton.addEventListener('click', () => modal.classList.add('hidden'));
-
-        // Set default year to the current year
-        yearInput.value = new Date().getFullYear();
 
         // --- Functions ---
         function showMessage(msg, isError = false) {
@@ -125,10 +125,11 @@
 
         async function fetchGames() {
             const username = usernameInput.value.trim();
-            const year = yearInput.value;
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
 
-            if (!username || !year) {
-                showModal('Input Error', 'Please enter a valid BGG username and year.');
+            if (!username || !startDate || !endDate) {
+                showModal('Input Error', 'Please enter a valid BGG username, start date, and end date.');
                 return;
             }
 
@@ -137,9 +138,6 @@
             fetchButton.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                const startDate = `${year}-01-01`;
-                const endDate = `${year}-12-31`;
-
                 const playsResponse = await fetch(`${bggPlaysUrl}?username=${username}&startDate=${startDate}&endDate=${endDate}`);
                 const playsData = await playsResponse.json();
 
@@ -148,7 +146,7 @@
                 }
 
                 if (!playsData.gameIds || playsData.gameIds.length === 0) {
-                    showMessage(`No plays found for "${username}" in ${year}.`, false);
+                    showMessage(`No plays found for "${username}" between ${startDate} and ${endDate}.`, false);
                     gamesTableBody.innerHTML = '';
                     return;
                 }
@@ -176,7 +174,7 @@
                 allGames.sort((a, b) => b.playCount - a.playCount);
 
                 renderResults(allGames);
-                showMessage(`Found ${allGames.length} unique games played by "${username}" in ${year}.`, false);
+                showMessage(`Found ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
 
             } catch (error) {
                 console.error('Fetch error:', error);
