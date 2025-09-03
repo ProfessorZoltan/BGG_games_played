@@ -139,10 +139,19 @@
 
             try {
                 const playsResponse = await fetch(`${bggPlaysUrl}?username=${username}&startDate=${startDate}&endDate=${endDate}`);
-                const playsData = await playsResponse.json();
+                
+                // Get the text from the response first to check for non-JSON content
+                const playsResponseText = await playsResponse.text();
 
                 if (!playsResponse.ok) {
-                    throw new Error(playsData.error || `Error fetching plays: ${playsResponse.statusText}`);
+                    throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}. Response content: ${playsResponseText}`);
+                }
+
+                let playsData;
+                try {
+                    playsData = JSON.parse(playsResponseText);
+                } catch (e) {
+                    throw new Error(`Failed to parse JSON response from server. Response content: "${playsResponseText}"`);
                 }
 
                 if (!playsData.gameIds || playsData.gameIds.length === 0) {
