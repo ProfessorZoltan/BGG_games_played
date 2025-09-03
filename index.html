@@ -320,13 +320,15 @@
                 
                 if (allGames.length > 0) {
                     renderResults(allGames, minOwnedCount);
-                    showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
+                    // Check if some games were missing data
                     if (allGames.length < gameIds.length) {
                          const missingCount = gameIds.length - allGames.length;
-                         showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}. ${missingCount} game(s) could not be found or have no associated statistics.`, false);
+                         showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}. ${missingCount} game(s) were found, but no statistics were available.`, false);
+                    } else {
+                        showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
                     }
                 } else {
-                    showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique game IDs, but no game statistics were returned by the BGG API. The games may no longer exist in the database.`, false);
+                    showMessage(`Found ${allPlays.length} total plays, but no game statistics were found for these ${gameIds.length} unique games. The games may not exist in the database or the data is unavailable.`, false);
                     gamesTableBody.innerHTML = '';
                 }
 
