@@ -309,11 +309,7 @@
                     await sleep(6000); // Wait 6 seconds between stat chunks
                 }
 
-                if (allGames.length === 0 && gameIds.length > 0) {
-                    showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique game IDs, but no game statistics were returned by the BGG API. The games may no longer exist in the database.`, false);
-                    gamesTableBody.innerHTML = '';
-                    return;
-                }
+                // Removed the check for allGames.length and gameIds.length to allow for partial results.
                 
                 // Sort by average rating, descending (highest to lowest)
                 allGames.sort((a, b) => {
@@ -321,9 +317,18 @@
                     const ratingB = b.averageRating === 'N/A' ? -1 : b.averageRating;
                     return ratingB - ratingA;
                 });
-
-                renderResults(allGames, minOwnedCount);
-                showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
+                
+                if (allGames.length > 0) {
+                    renderResults(allGames, minOwnedCount);
+                    showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
+                    if (allGames.length < gameIds.length) {
+                         const missingCount = gameIds.length - allGames.length;
+                         showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}. ${missingCount} game(s) could not be found or have no associated statistics.`, false);
+                    }
+                } else {
+                    showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique game IDs, but no game statistics were returned by the BGG API. The games may no longer exist in the database.`, false);
+                    gamesTableBody.innerHTML = '';
+                }
 
             } catch (error) {
                 console.error('Fetch error:', error);
