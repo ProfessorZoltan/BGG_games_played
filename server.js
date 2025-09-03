@@ -1,33 +1,38 @@
-const express = require('express');
 const axios = require('axios');
 const xml2js = require('xml2js');
-const cors = require('cors');
+const cors = require('cors')({ origin: true }); // Vercel handles CORS this way
 
-const app = express();
-const port = 3000;
+const BGG_API_URL = 'https://boardgamegeek.com/xmlapi2';
 
-app.use(cors());
-
-// Vercel serverless function entry point
 module.exports = async (req, res) => {
-    // Check for the API endpoint in the request URL
-    if (req.url.startsWith('/api/bgg-plays')) {
-        await handlePlays(req, res);
-    } else if (req.url.startsWith('/api/bgg-stats')) {
-        await handleStats(req, res);
-    } else {
-        res.status(404).json({ error: 'Not Found' });
-    }
+    // Vercel serverless functions do not need app.use for CORS, it is handled directly
+    // by the module.exports function.
+    cors(req, res, async () => {
+        try {
+            if (req.url.startsWith('/api/bgg-plays')) {
+                await handlePlays(req, res);
+            } else if (req.url.startsWith('/api/bgg-stats')) {
+                await handleStats(req, res);
+            } else {
+                res.status(404).json({ error: 'Not Found' });
+            }
+        } catch (error) {
+            console.error('Unhandled server error:', error);
+            res.status(500).json({ error: 'An unexpected server error occurred.' });
+        }
+    });
 };
 
 async function handlePlays(req, res) {
-    try {
-        const username = req.query.username;
-        const startDate = req.query.startDate;
-        const endDate = req.query.endDate;
+    const { username, startDate, endDate } = req.query;
 
+    if (!username || !startDate || !endDate) {
+        return res.status(400).json({ error: 'Username, start date, and end date are required.' });
+    }
+
+    try {
         console.log(`Fetching plays for user: ${username}`);
-        const playsResponse = await axios.get(`https://boardgamegeek.com/xmlapi2/plays?username=${username}`);
+        const playsResponse = await axios.get(`${BGG_API_URL}/plays?username=${username}`);
         const playsXml = playsResponse.data;
 
         const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
@@ -53,7 +58,6 @@ async function handlePlays(req, res) {
 
         console.log(`Found ${gameIds.length} unique game IDs with play counts.`);
         res.status(200).json({ gameIds });
-
     } catch (error) {
         console.error('Error fetching BGG plays:', error.response ? error.response.data : error.message);
         res.status(500).json({ error: `Failed to fetch BGG plays: ${error.message}` });
@@ -61,15 +65,15 @@ async function handlePlays(req, res) {
 }
 
 async function handleStats(req, res) {
+    const { gameId } = req.query;
+
+    if (!gameId) {
+        return res.status(400).json({ error: 'Game ID is required.' });
+    }
+
     try {
-        const gameId = req.query.gameId;
-
-        if (!gameId) {
-            return res.status(400).json({ error: 'Game ID is required.' });
-        }
-
         console.log(`Fetching stats for game ID: ${gameId}`);
-        const statsResponse = await axios.get(`https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`);
+        const statsResponse = await axios.get(`${BGG_API_URL}/thing?id=${gameId}&stats=1`);
         const statsXml = statsResponse.data;
 
         const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
@@ -89,16 +93,8 @@ async function handleStats(req, res) {
             ownedCount,
             averageRating
         });
-
     } catch (error) {
         console.error('Error fetching BGG stats:', error.response ? error.response.data : error.message);
         res.status(500).json({ error: `Failed to fetch BGG stats: ${error.message}` });
     }
-}
-
-// Keep the old app.listen for local testing
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(port, () => {
-        console.log(`Proxy server listening at http://localhost:${port}`);
-    });
 }
