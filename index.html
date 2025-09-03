@@ -133,7 +133,6 @@
         function showMessage(msg, isError = false) {
             messageDiv.textContent = msg;
             messageDiv.className = `text-center font-medium mt-4 ${isError ? 'text-red-500' : 'text-gray-600'}`;
-            resultsTable.classList.add('hidden');
         }
 
         function showModal(title, message) {
@@ -153,6 +152,7 @@
             }
 
             showMessage('Fetching data from BGG, this may take a moment...', false);
+            resultsTable.classList.add('hidden'); // Hide the table before fetching new data
             fetchButton.disabled = true;
             fetchButton.classList.add('opacity-50', 'cursor-not-allowed');
 
