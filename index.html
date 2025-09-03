@@ -126,7 +126,7 @@
         try {
             messageDiv.textContent = 'Fetching your play history from BGG...';
             // Updated to use the new Vercel URL
-            const playsResponse = await fetch(`https://bgg-games-played-git-main-eric-urbans-projects.vercel.app/api/bgg-plays?username=${username}&startDate=${startDate}&endDate=${endDate}`);
+            const playsResponse = await fetch(`https://bgg-games-played.vercel.app/api/bgg-plays?username=${username}&startDate=${startDate}&endDate=${endDate}`);
             const playsData = await playsResponse.json();
 
             if (!playsResponse.ok) {
@@ -142,7 +142,7 @@
             messageDiv.textContent = 'Found plays. Fetching game statistics...';
             const gamesWithStats = await Promise.all(playsData.gameIds.map(async (play) => {
                 // Updated to use the new Vercel URL
-                const statsResponse = await fetch(`https://bgg-games-played-git-main-eric-urbans-projects.vercel.app/api/bgg-stats?gameId=${play.gameId}`);
+                const statsResponse = await fetch(`https://bgg-games-played.vercel.app/api/bgg-stats?gameId=${play.gameId}`);
                 const statsData = await statsResponse.json();
 
                 if (!statsResponse.ok) {
