@@ -201,10 +201,10 @@
                     const name = item.querySelector('name').getAttribute('value');
                     const playCount = gamePlays.get(gameId) || 0;
                     
-                    const ownedAttribute = item.querySelector('statistics > ratings')?.getAttribute('owned');
+                    const ownedElement = item.querySelector('statistics > ratings > owned');
                     let ownedCount = 'N/A';
-                    if (ownedAttribute) {
-                        ownedCount = parseInt(ownedAttribute, 10);
+                    if (ownedElement) {
+                        ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
                     }
                     
                     const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
