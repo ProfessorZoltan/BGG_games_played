@@ -113,6 +113,9 @@
         fetchButton.addEventListener('click', fetchGames);
         modalCloseButton.addEventListener('click', () => modal.classList.add('hidden'));
 
+        // Helper function for rate limiting
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
         // --- Functions ---
         function prepopulateDates() {
             const today = new Date();
@@ -160,11 +163,10 @@
                 let allPlays = [];
                 let page = 1;
                 let totalPlays = 0;
-                const pageSize = 100;
                 let hasMore = true;
                 const maxPages = 10; // Safety limit to prevent infinite loops
                 const parser = new DOMParser();
-
+                
                 // Use a do-while loop to fetch all pages of plays
                 do {
                     const playsResponse = await fetch(`${bggApiBaseUrl}/plays?username=${username}&mindate=${startDate}&maxdate=${endDate}&page=${page}`);
@@ -194,6 +196,11 @@
                     hasMore = allPlays.length < totalPlays && page < maxPages;
                     page++;
 
+                    // Add a small delay to prevent rate limiting
+                    if (hasMore) {
+                        await sleep(200);
+                    }
+                    
                 } while (hasMore);
                 
                 if (allPlays.length === 0) {
@@ -209,6 +216,10 @@
                 });
 
                 const gameIds = [...gamePlays.keys()];
+                
+                // Add a longer delay before fetching stats for a large number of games
+                await sleep(1000);
+
                 const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${gameIds.join(',')}&stats=1`);
 
                 if (!statsResponse.ok) {
@@ -288,7 +299,6 @@
             });
             resultsTable.classList.remove('hidden');
         }
-
     </script>
 </body>
 </html>
