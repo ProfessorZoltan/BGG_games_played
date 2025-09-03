@@ -157,28 +157,53 @@
             fetchButton.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                const playsResponse = await fetch(`${bggApiBaseUrl}/plays?username=${username}&mindate=${startDate}&maxdate=${endDate}`);
-                
-                if (!playsResponse.ok) {
-                    throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}.`);
-                }
+                let allPlays = [];
+                let page = 1;
+                let totalPlays = 0;
+                const pageSize = 100;
+                let hasMore = true;
+                const maxPages = 10; // Safety limit to prevent infinite loops
 
-                const parser = new DOMParser();
-                const xmlPlaysDoc = parser.parseFromString(await playsResponse.text(), 'text/xml');
+                // Use a do-while loop to fetch all pages of plays
+                do {
+                    const playsResponse = await fetch(`${bggApiBaseUrl}/plays?username=${username}&mindate=${startDate}&maxdate=${endDate}&page=${page}`);
+                    
+                    if (!playsResponse.ok) {
+                        throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}.`);
+                    }
+
+                    const parser = new DOMParser();
+                    const xmlPlaysDoc = parser.parseFromString(await playsResponse.text(), 'text/xml');
+                    
+                    const errorElement = xmlPlaysDoc.querySelector('error');
+                    if (errorElement) {
+                        throw new Error(`BGG API Error: ${errorElement.getAttribute('message')}`);
+                    }
+                    
+                    const plays = Array.from(xmlPlaysDoc.querySelectorAll('play'));
+                    allPlays = allPlays.concat(plays);
+
+                    const totalPlaysAttr = xmlPlaysDoc.querySelector('plays')?.getAttribute('total');
+                    if (totalPlaysAttr) {
+                        totalPlays = parseInt(totalPlaysAttr, 10);
+                    } else {
+                        // If no total attribute, assume only one page
+                        totalPlays = allPlays.length;
+                    }
+
+                    hasMore = allPlays.length < totalPlays && page < maxPages;
+                    page++;
+
+                } while (hasMore);
                 
-                const errorElement = xmlPlaysDoc.querySelector('error');
-                if (errorElement) {
-                    throw new Error(`BGG API Error: ${errorElement.getAttribute('message')}`);
-                }
-                const plays = xmlPlaysDoc.querySelectorAll('play');
-                if (plays.length === 0) {
+                if (allPlays.length === 0) {
                     showMessage(`No plays found for "${username}" between ${startDate} and ${endDate}.`, false);
                     gamesTableBody.innerHTML = '';
                     return;
                 }
 
                 const gamePlays = new Map();
-                plays.forEach(play => {
+                allPlays.forEach(play => {
                     const gameId = play.querySelector('item').getAttribute('objectid');
                     gamePlays.set(gameId, (gamePlays.get(gameId) || 0) + 1);
                 });
