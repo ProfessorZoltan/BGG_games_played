@@ -4,111 +4,101 @@ const xml2js = require('xml2js');
 const cors = require('cors');
 
 const app = express();
+const port = 3000;
+
 app.use(cors());
 
-// Global error handler to catch unexpected server errors and return a JSON response.
-app.use((err, req, res, next) => {
-    console.error('Unhandled server error:', err.stack);
-    res.status(500).json({ error: 'An unexpected server error occurred.' });
-});
-
-// Vercel serverless functions require a handler for each endpoint
-// instead of a single listening server. The express app itself
-// serves as the handler.
-app.get('/api/bgg-plays', async (req, res, next) => {
-    const { username, startDate, endDate } = req.query;
-
-    console.log(`Received request for plays: username=${username}, startDate=${startDate}, endDate=${endDate}`);
-
-    if (!username) {
-        return res.status(400).json({ error: 'Username is required.' });
+// Vercel serverless function entry point
+module.exports = async (req, res) => {
+    // Check for the API endpoint in the request URL
+    if (req.url.startsWith('/api/bgg-plays')) {
+        await handlePlays(req, res);
+    } else if (req.url.startsWith('/api/bgg-stats')) {
+        await handleStats(req, res);
+    } else {
+        res.status(404).json({ error: 'Not Found' });
     }
+};
 
+async function handlePlays(req, res) {
     try {
-        const response = await axios.get(`https://boardgamegeek.com/xmlapi2/plays?username=${username}&mindate=${startDate}&maxdate=${endDate}`);
-        const xml = response.data;
+        const username = req.query.username;
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
 
-        let parsedXml;
-        xml2js.parseString(xml, { explicitArray: false, mergeAttrs: true }, (err, result) => {
-            if (err) {
-                console.error('XML parsing error:', err);
-                return res.status(500).json({ error: 'Error parsing BGG XML.' });
-            }
-            parsedXml = result;
-        });
+        console.log(`Fetching plays for user: ${username}`);
+        const playsResponse = await axios.get(`https://boardgamegeek.com/xmlapi2/plays?username=${username}`);
+        const playsXml = playsResponse.data;
 
-        const plays = parsedXml?.plays?.play;
-        if (!plays) {
-            console.log('No plays found for the user in the specified period.');
-            return res.status(404).json({ gameIds: [] });
-        }
+        const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
+        const playsResult = await parser.parseStringPromise(playsXml);
 
         const gamesWithPlays = {};
-        const playsArray = Array.isArray(plays) ? plays : [plays];
+        if (playsResult.plays && playsResult.plays.play) {
+            const plays = Array.isArray(playsResult.plays.play) ? playsResult.plays.play : [playsResult.plays.play];
 
-        playsArray.forEach(play => {
-            const gameId = play.item?.id;
-            if (gameId) {
-                if (!gamesWithPlays[gameId]) {
-                    gamesWithPlays[gameId] = {
-                        gameId: gameId,
-                        playCount: 0
-                    };
+            plays.forEach(play => {
+                const playDate = play.date;
+                if (playDate >= startDate && playDate <= endDate) {
+                    const gameId = play.item.objectid;
+                    gamesWithPlays[gameId] = (gamesWithPlays[gameId] || 0) + 1;
                 }
-                gamesWithPlays[gameId].playCount += 1;
-            }
-        });
+            });
+        }
 
-        console.log(`Found ${Object.keys(gamesWithPlays).length} unique games.`);
-        res.json({ gameIds: Object.values(gamesWithPlays) });
+        const gameIds = Object.keys(gamesWithPlays).map(id => ({
+            gameId: id,
+            playCount: gamesWithPlays[id]
+        }));
+
+        console.log(`Found ${gameIds.length} unique game IDs with play counts.`);
+        res.status(200).json({ gameIds });
 
     } catch (error) {
-        console.error('Error fetching BGG plays:', error.message);
-        // Pass the error to the global handler
-        next(error);
+        console.error('Error fetching BGG plays:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: `Failed to fetch BGG plays: ${error.message}` });
     }
-});
+}
 
-app.get('/api/bgg-stats', async (req, res, next) => {
-    const { gameId } = req.query;
-
-    console.log(`Received request for stats: gameId=${gameId}`);
-
-    if (!gameId) {
-        return res.status(400).json({ error: 'Game ID is required.' });
-    }
-
+async function handleStats(req, res) {
     try {
-        const response = await axios.get(`https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`);
-        const xml = response.data;
+        const gameId = req.query.gameId;
 
-        let parsedXml;
-        xml2js.parseString(xml, { explicitArray: false, mergeAttrs: true }, (err, result) => {
-            if (err) {
-                console.error('XML parsing error:', err);
-                return res.status(500).json({ error: 'Error parsing BGG XML.' });
-            }
-            parsedXml = result;
-        });
+        if (!gameId) {
+            return res.status(400).json({ error: 'Game ID is required.' });
+        }
 
-        const item = parsedXml?.items?.item;
-        if (!item) {
-            console.log(`Game not found for ID: ${gameId}`);
+        console.log(`Fetching stats for game ID: ${gameId}`);
+        const statsResponse = await axios.get(`https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`);
+        const statsXml = statsResponse.data;
+
+        const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
+        const statsResult = await parser.parseStringPromise(statsXml);
+
+        const thing = statsResult.items.item;
+        if (!thing) {
             return res.status(404).json({ error: 'Game not found.' });
         }
 
-        const name = item.name?.[0]?.value || item.name?.value;
-        const ownedCount = item.statistics?.ratings?.owned?.value;
-        const averageRating = item.statistics?.ratings?.average?.value;
+        const ownedCount = thing.owned ? thing.owned.value : 'N/A';
+        const averageRating = thing.statistics.ratings.average ? parseFloat(thing.statistics.ratings.average.value) : 'N/A';
+        const name = Array.isArray(thing.name) ? thing.name[0].value : thing.name.value;
 
-        res.json({ name, ownedCount, averageRating });
+        res.status(200).json({
+            name,
+            ownedCount,
+            averageRating
+        });
 
     } catch (error) {
-        console.error(`Error fetching BGG stats for game ID ${gameId}:`, error.message);
-        // Pass the error to the global handler
-        next(error);
+        console.error('Error fetching BGG stats:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: `Failed to fetch BGG stats: ${error.message}` });
     }
-});
+}
 
-// For Vercel, we export the app instance.
-module.exports = app;
+// Keep the old app.listen for local testing
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(port, () => {
+        console.log(`Proxy server listening at http://localhost:${port}`);
+    });
+}
