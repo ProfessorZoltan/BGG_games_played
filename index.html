@@ -1,209 +1,209 @@
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-<script>
-    tailwind.config = {
-        theme: {
-            extend: {
-                colors: {
-                    'bgg-green': '#3B5998',
-                    'bgg-gray': '#F2F2F2',
-                },
-                fontFamily: {
-                    sans: ['Inter', 'sans-serif'],
-                },
-            }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoardGameGeek Play Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
         }
-    }
-</script>
-<style>
-    body {
-        font-family: 'Inter', sans-serif;
-    }
-
-    .container {
-        max-width: 900px;
-    }
-
-    .game-card {
-        transition: transform 0.2s;
-    }
-
-    .game-card:hover {
-        transform: translateY(-5px);
-    }
-
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
+        .container {
+            max-width: 800px;
         }
-
-        100% {
-            transform: rotate(360deg);
+        .glow-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-    }
+        .glow-button:hover {
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.5);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
-    .spinner {
-        animation: spin 1s linear infinite;
-    }
-</style>
+    <!-- Main Container -->
+    <div class="container bg-white p-8 rounded-2xl shadow-xl space-y-8">
+        <h1 class="text-4xl font-bold text-center text-gray-800">BGG Play Tracker</h1>
 
-<div class="bg-bgg-gray min-h-screen p-8 flex items-center justify-center">
-    <div class="container bg-white rounded-xl shadow-2xl p-6 md:p-10 text-gray-800">
-        <h1 class="text-3xl font-bold text-center text-bgg-green mb-6">BGG Games Played</h1>
-        <p class="text-center text-sm text-gray-600 mb-8">
-            Find the games you played last month that are owned by the fewest people.
-        </p>
-
+        <!-- Input Section -->
         <div class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label for="username" class="block text-sm font-medium text-gray-700">BGG Username</label>
-                    <input type="text" id="username"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-bgg-green focus:ring-bgg-green p-2"
-                        placeholder="e.g., IncurableHam">
-                </div>
-                <div>
-                    <label for="startDate" class="block text-sm font-medium text-gray-700">Start Date</label>
-                    <input type="date" id="startDate"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-bgg-green focus:ring-bgg-green p-2">
-                </div>
-                <div>
-                    <label for="endDate" class="block text-sm font-medium text-gray-700">End Date</label>
-                    <input type="date" id="endDate"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-bgg-green focus:ring-bgg-green p-2">
-                </div>
+            <div class="flex flex-col sm:flex-row gap-4 items-center">
+                <input id="usernameInput" type="text" placeholder="BGG Username"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                <input id="yearInput" type="number" placeholder="Year (e.g., 2024)"
+                       class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
             </div>
+            <button id="fetchButton"
+                    class="glow-button w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition-all">
+                Fetch Plays
+            </button>
+        </div>
 
-            <div class="flex justify-center mt-6">
-                <button onclick="fetchStats()"
-                    class="w-full md:w-auto px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-bgg-green hover:bg-bgg-green-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-bgg-green transition ease-in-out duration-150">
-                    Fetch Games Played
-                </button>
+        <!-- Message/Loading Section -->
+        <div id="message" class="text-center text-gray-600 font-medium"></div>
+
+        <!-- Results Table -->
+        <div id="resultsTable" class="hidden overflow-x-auto rounded-xl shadow-md">
+            <table class="w-full text-left table-auto border-collapse">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="px-4 py-3 text-gray-700 font-bold rounded-tl-xl">Game Name</th>
+                        <th class="px-4 py-3 text-center text-gray-700 font-bold">Plays</th>
+                        <th class="px-4 py-3 text-center text-gray-700 font-bold">Owned Count</th>
+                        <th class="px-4 py-3 text-center text-gray-700 font-bold rounded-tr-xl">Avg. Rating</th>
+                    </tr>
+                </thead>
+                <tbody id="gamesTableBody" class="divide-y divide-gray-200">
+                    <!-- Game data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Error/Message Modal -->
+        <div id="modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-2xl bg-white">
+                <div class="text-center">
+                    <h3 id="modalTitle" class="text-2xl font-bold text-gray-900"></h3>
+                    <div class="mt-2 px-7 py-3">
+                        <p id="modalMessage" class="text-gray-500"></p>
+                    </div>
+                    <div class="items-center px-4 py-3">
+                        <button id="modalCloseButton" class="w-full px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-xl shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            Close
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="results" class="mt-8">
-            <div id="message" class="text-center font-medium text-gray-600"></div>
-            <div id="loading" class="text-center mt-4 hidden">
-                <i class="fas fa-spinner fa-spin text-bgg-green text-3xl"></i>
-                <p class="mt-2 text-gray-500">Working on it...</p>
-            </div>
-            <div id="gameList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6"></div>
-        </div>
     </div>
-</div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const today = new Date();
-        const firstDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    <script>
+        // --- API URLs ---
+        const bggApiBaseUrl = 'https://bgg-games-played-b9j1kydax-eric-urbans-projects.vercel.app';
+        const bggPlaysUrl = `${bggApiBaseUrl}/api/bgg-plays`;
+        const bggStatsUrl = `${bggApiBaseUrl}/api/bgg-stats`;
 
-        const formatDate = (date) => date.toISOString().split('T')[0];
-
-        document.getElementById('startDate').value = formatDate(firstDayOfPreviousMonth);
-        document.getElementById('endDate').value = formatDate(lastDayOfPreviousMonth);
-    });
-
-    async function fetchStats() {
-        const username = document.getElementById('username').value;
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
+        // --- DOM Elements ---
+        const usernameInput = document.getElementById('usernameInput');
+        const yearInput = document.getElementById('yearInput');
+        const fetchButton = document.getElementById('fetchButton');
         const messageDiv = document.getElementById('message');
-        const loadingDiv = document.getElementById('loading');
-        const gameListDiv = document.getElementById('gameList');
+        const resultsTable = document.getElementById('resultsTable');
+        const gamesTableBody = document.getElementById('gamesTableBody');
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const modalCloseButton = document.getElementById('modalCloseButton');
 
-        messageDiv.textContent = '';
-        gameListDiv.innerHTML = '';
-        loadingDiv.classList.remove('hidden');
+        // --- Event Listeners ---
+        fetchButton.addEventListener('click', fetchGames);
+        modalCloseButton.addEventListener('click', () => modal.classList.add('hidden'));
 
-        if (!username || !startDate || !endDate) {
-            messageDiv.textContent = 'Please fill out all fields.';
-            loadingDiv.classList.add('hidden');
-            return;
+        // Set default year to the current year
+        yearInput.value = new Date().getFullYear();
+
+        // --- Functions ---
+        function showMessage(msg, isError = false) {
+            messageDiv.textContent = msg;
+            messageDiv.className = `text-center font-medium mt-4 ${isError ? 'text-red-500' : 'text-gray-600'}`;
+            resultsTable.classList.add('hidden');
         }
 
-        try {
-            messageDiv.textContent = 'Fetching your play history from BGG...';
-            // Updated to use the new Vercel URL
-            const playsResponse = await fetch(`https://bgg-games-played.vercel.app/api/bgg-plays?username=${username}&startDate=${startDate}&endDate=${endDate}`);
-            const playsData = await playsResponse.json();
+        function showModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modal.classList.remove('hidden');
+        }
 
-            if (!playsResponse.ok) {
-                throw new Error(playsData.error || 'Failed to fetch play history');
-            }
+        async function fetchGames() {
+            const username = usernameInput.value.trim();
+            const year = yearInput.value;
 
-            if (!playsData.gameIds || playsData.gameIds.length === 0) {
-                messageDiv.textContent = 'No games found for the specified period.';
-                loadingDiv.classList.add('hidden');
+            if (!username || !year) {
+                showModal('Input Error', 'Please enter a valid BGG username and year.');
                 return;
             }
 
-            messageDiv.textContent = 'Found plays. Fetching game statistics...';
-            const gamesWithStats = await Promise.all(playsData.gameIds.map(async (play) => {
-                // Updated to use the new Vercel URL
-                const statsResponse = await fetch(`https://bgg-games-played.vercel.app/api/bgg-stats?gameId=${play.gameId}`);
-                const statsData = await statsResponse.json();
+            showMessage('Fetching data from BGG, this may take a moment...', false);
+            fetchButton.disabled = true;
+            fetchButton.classList.add('opacity-50', 'cursor-not-allowed');
 
-                if (!statsResponse.ok) {
-                    throw new Error(statsData.error || `Failed to fetch stats for game ID ${play.gameId}`);
+            try {
+                const startDate = `${year}-01-01`;
+                const endDate = `${year}-12-31`;
+
+                const playsResponse = await fetch(`${bggPlaysUrl}?username=${username}&startDate=${startDate}&endDate=${endDate}`);
+                const playsData = await playsResponse.json();
+
+                if (!playsResponse.ok) {
+                    throw new Error(playsData.error || `Error fetching plays: ${playsResponse.statusText}`);
                 }
 
-                return {
-                    id: play.gameId,
-                    playCount: play.playCount,
-                    name: statsData.name,
-                    ownedCount: statsData.ownedCount,
-                    averageRating: statsData.averageRating
-                };
-            }));
+                if (!playsData.gameIds || playsData.gameIds.length === 0) {
+                    showMessage(`No plays found for "${username}" in ${year}.`, false);
+                    gamesTableBody.innerHTML = '';
+                    return;
+                }
 
-            // Sort by average rating, descending
-            gamesWithStats.sort((a, b) => b.averageRating - a.averageRating);
+                // Fetch stats for each game
+                const statsPromises = playsData.gameIds.map(game => {
+                    return fetch(`${bggStatsUrl}?gameId=${game.gameId}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                console.error(`Failed to fetch stats for game ID ${game.gameId}`);
+                                return null;
+                            }
+                            return response.json();
+                        })
+                        .then(data => ({ ...data, playCount: game.playCount }))
+                        .catch(err => {
+                            console.error(`Error fetching stats for game ID ${game.gameId}:`, err);
+                            return null;
+                        });
+                });
 
-            loadingDiv.classList.add('hidden');
-            messageDiv.textContent = `Found stats for ${gamesWithStats.length} games.`;
+                const allGames = (await Promise.all(statsPromises)).filter(game => game !== null);
+                
+                // Sort by play count, descending
+                allGames.sort((a, b) => b.playCount - a.playCount);
 
-            displayGames(gamesWithStats);
+                renderResults(allGames);
+                showMessage(`Found ${allGames.length} unique games played by "${username}" in ${year}.`, false);
 
-        } catch (error) {
-            loadingDiv.classList.add('hidden');
-            messageDiv.textContent = `Proxy Error: ${error.message}`;
-            console.error('Error in fetchStats:', error);
-        }
-    }
-
-    function displayGames(games) {
-        const gameListDiv = document.getElementById('gameList');
-        gameListDiv.innerHTML = '';
-
-        if (games.length === 0) {
-            gameListDiv.innerHTML = '<p class="text-center text-gray-500">No results to display.</p>';
-            return;
-        }
-
-        const leastOwnedGame = games.reduce((prev, current) => {
-            return (prev.ownedCount < current.ownedCount) ? prev : current;
-        });
-
-        games.forEach(game => {
-            const gameCard = document.createElement('div');
-            let highlightClass = '';
-            if (game.id === leastOwnedGame.id) {
-                highlightClass = 'border-4 border-yellow-400 bg-yellow-100 relative';
+            } catch (error) {
+                console.error('Fetch error:', error);
+                showModal('API Error', `An error occurred: ${error.message}`);
+                showMessage('Failed to fetch data. Please try again later.', true);
+            } finally {
+                fetchButton.disabled = false;
+                fetchButton.classList.remove('opacity-50', 'cursor-not-allowed');
             }
-            
-            gameCard.className = `game-card bg-white rounded-lg shadow-md p-4 flex flex-col items-center text-center ${highlightClass}`;
-            gameCard.innerHTML = `
-                ${game.id === leastOwnedGame.id ? '<div class="absolute top-0 right-0 -mt-2 -mr-2 px-2 py-1 bg-yellow-400 text-white rounded-full text-xs font-bold shadow-lg">🏆 Least Owned</div>' : ''}
-                <a href="https://boardgamegeek.com/boardgame/${game.id}" target="_blank" class="text-lg font-semibold text-bgg-green hover:underline">${game.name}</a>
-                <div class="mt-2 text-sm text-gray-600">
-                    <p><strong>Your Plays:</strong> ${game.playCount}</p>
-                    <p><strong>Owned By:</strong> ${game.ownedCount}</p>
-                    <p><strong>Avg. Rating:</strong> ${game.averageRating ? game.averageRating.toFixed(2) : 'N/A'}</p>
-                </div>
-            `;
-            gameListDiv.appendChild(gameCard);
-        });
-    }
-</script>
+        }
+
+        function renderResults(games) {
+            gamesTableBody.innerHTML = '';
+            games.forEach(game => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-medium text-gray-900 truncate">${game.name}</td>
+                    <td class="px-4 py-3 text-center text-gray-700">${game.playCount}</td>
+                    <td class="px-4 py-3 text-center text-gray-700">${game.ownedCount}</td>
+                    <td class="px-4 py-3 text-center text-gray-700">${game.averageRating !== 'N/A' ? game.averageRating.toFixed(2) : 'N/A'}</td>
+                `;
+                gamesTableBody.appendChild(row);
+            });
+            resultsTable.classList.remove('hidden');
+        }
+
+    </script>
+</body>
+</html>
