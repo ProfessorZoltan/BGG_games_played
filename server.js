@@ -6,11 +6,19 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
+// Global error handler to catch unexpected server errors and return a JSON response.
+app.use((err, req, res, next) => {
+    console.error('Unhandled server error:', err.stack);
+    res.status(500).json({ error: 'An unexpected server error occurred.' });
+});
+
 // Vercel serverless functions require a handler for each endpoint
 // instead of a single listening server. The express app itself
 // serves as the handler.
-app.get('/api/bgg-plays', async (req, res) => {
+app.get('/api/bgg-plays', async (req, res, next) => {
     const { username, startDate, endDate } = req.query;
+
+    console.log(`Received request for plays: username=${username}, startDate=${startDate}, endDate=${endDate}`);
 
     if (!username) {
         return res.status(400).json({ error: 'Username is required.' });
@@ -31,6 +39,7 @@ app.get('/api/bgg-plays', async (req, res) => {
 
         const plays = parsedXml?.plays?.play;
         if (!plays) {
+            console.log('No plays found for the user in the specified period.');
             return res.status(404).json({ gameIds: [] });
         }
 
@@ -50,16 +59,20 @@ app.get('/api/bgg-plays', async (req, res) => {
             }
         });
 
+        console.log(`Found ${Object.keys(gamesWithPlays).length} unique games.`);
         res.json({ gameIds: Object.values(gamesWithPlays) });
 
     } catch (error) {
         console.error('Error fetching BGG plays:', error.message);
-        res.status(500).json({ error: 'Failed to fetch BGG play history.' });
+        // Pass the error to the global handler
+        next(error);
     }
 });
 
-app.get('/api/bgg-stats', async (req, res) => {
+app.get('/api/bgg-stats', async (req, res, next) => {
     const { gameId } = req.query;
+
+    console.log(`Received request for stats: gameId=${gameId}`);
 
     if (!gameId) {
         return res.status(400).json({ error: 'Game ID is required.' });
@@ -80,6 +93,7 @@ app.get('/api/bgg-stats', async (req, res) => {
 
         const item = parsedXml?.items?.item;
         if (!item) {
+            console.log(`Game not found for ID: ${gameId}`);
             return res.status(404).json({ error: 'Game not found.' });
         }
 
@@ -90,8 +104,9 @@ app.get('/api/bgg-stats', async (req, res) => {
         res.json({ name, ownedCount, averageRating });
 
     } catch (error) {
-        console.error('Error fetching BGG stats:', error.message);
-        res.status(500).json({ error: 'Failed to fetch BGG stats.' });
+        console.error(`Error fetching BGG stats for game ID ${gameId}:`, error.message);
+        // Pass the error to the global handler
+        next(error);
     }
 });
 
