@@ -242,43 +242,60 @@
                 // Fetch game stats in chunks to avoid API rate limits and URL length limits
                 for (let i = 0; i < gameIds.length; i += chunkSize) {
                     const chunk = gameIds.slice(i, i + chunkSize);
-                    console.log(`Fetching stats for chunk ${i/chunkSize + 1} of ${Math.ceil(gameIds.length/chunkSize)}...`);
-                    const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${chunk.join(',')}&stats=1`);
+                    let retries = 0;
+                    const maxRetries = 3;
+                    let success = false;
+                    
+                    while (retries < maxRetries && !success) {
+                        try {
+                            console.log(`Fetching stats for chunk ${i/chunkSize + 1} of ${Math.ceil(gameIds.length/chunkSize)}...`);
+                            const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${chunk.join(',')}&stats=1`);
 
-                    if (!statsResponse.ok) {
-                        throw new Error(`Server returned an error: ${statsResponse.status} ${statsResponse.statusText}.`);
+                            if (!statsResponse.ok) {
+                                throw new Error(`Server returned an error: ${statsResponse.status} ${statsResponse.statusText}.`);
+                            }
+
+                            const xmlStatsDoc = parser.parseFromString(await statsResponse.text(), 'text/xml');
+                            const statsItems = xmlStatsDoc.querySelectorAll('item');
+
+                            statsItems.forEach(item => {
+                                const gameId = item.getAttribute('id');
+                                const name = item.querySelector('name').getAttribute('value');
+                                const playCount = gamePlays.get(gameId) || 0;
+                                
+                                const ownedElement = item.querySelector('statistics > ratings > owned');
+                                let ownedCount = 'N/A';
+                                if (ownedElement) {
+                                    ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
+                                }
+                                
+                                const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
+                                
+                                if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
+                                    minOwnedCount = ownedCount;
+                                }
+
+                                allGames.push({
+                                    name,
+                                    playCount,
+                                    ownedCount,
+                                    averageRating
+                                });
+                            });
+                            success = true;
+                        } catch (error) {
+                            retries++;
+                            console.error(`Attempt ${retries} failed for chunk. Retrying in 10 seconds...`, error);
+                            if (retries < maxRetries) {
+                                await sleep(10000); // Wait 10 seconds before retrying
+                            } else {
+                                console.error(`Failed to fetch stats for chunk after ${maxRetries} retries. Skipping chunk.`);
+                            }
+                        }
                     }
-
-                    const xmlStatsDoc = parser.parseFromString(await statsResponse.text(), 'text/xml');
-                    const statsItems = xmlStatsDoc.querySelectorAll('item');
-
-                    statsItems.forEach(item => {
-                        const gameId = item.getAttribute('id');
-                        const name = item.querySelector('name').getAttribute('value');
-                        const playCount = gamePlays.get(gameId) || 0;
-                        
-                        const ownedElement = item.querySelector('statistics > ratings > owned');
-                        let ownedCount = 'N/A';
-                        if (ownedElement) {
-                            ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
-                        }
-                        
-                        const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
-                        
-                        if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
-                            minOwnedCount = ownedCount;
-                        }
-
-                        allGames.push({
-                            name,
-                            playCount,
-                            ownedCount,
-                            averageRating
-                        });
-                    });
                     
                     // Add a delay between each chunked request
-                    await sleep(4000); // Wait 4 seconds between stat chunks
+                    await sleep(6000); // Wait 6 seconds between stat chunks
                 }
                 
                 // Sort by average rating, descending (highest to lowest)
