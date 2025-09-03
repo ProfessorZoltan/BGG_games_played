@@ -328,7 +328,7 @@
                         showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
                     }
                 } else {
-                    showMessage(`Found ${allPlays.length} total plays, but no game statistics were found for these ${gameIds.length} unique games. The games may not exist in the database or the data is unavailable.`, false);
+                    showMessage(`Found ${allPlays.length} total plays, but we were unable to retrieve statistics for any of the ${gameIds.length} unique games.`, false);
                     gamesTableBody.innerHTML = '';
                 }
 
