@@ -240,12 +240,12 @@
 
                 const gameIds = [...gamePlays.keys()];
                 if (gameIds.length === 0) {
-                    showMessage(`Found ${allPlays.length} total plays, but none were associated with a specific game. This may happen if plays were logged without a game name.`, false);
+                    showMessage(`Found ${allPlays.length} total plays, but none were associated with a specific game. This can happen if plays were logged without a game name.`, false);
                     gamesTableBody.innerHTML = '';
                     return;
                 }
 
-                showMessage(`Found ${allPlays.length} total plays. Now fetching game statistics...`, false);
+                showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique games. Now fetching game statistics...`, false);
                 const allGames = [];
                 let minOwnedCount = Infinity;
                 const chunkSize = 50;
@@ -308,11 +308,17 @@
                     // Add a delay between each chunked request
                     await sleep(6000); // Wait 6 seconds between stat chunks
                 }
+
+                if (allGames.length === 0) {
+                    showModal('Game Data Missing', 'We found plays for this time period, but the BoardGameGeek API did not return game statistics for any of them. The games may no longer exist in the database.');
+                    showMessage('Completed fetching. No game data available to display.', false);
+                    return;
+                }
                 
                 // Sort by average rating, descending (highest to lowest)
                 allGames.sort((a, b) => {
                     const ratingA = a.averageRating === 'N/A' ? -1 : a.averageRating;
-                    const ratingB = b.averageRating === 'N/A' ? -1 : a.averageRating;
+                    const ratingB = b.averageRating === 'N/A' ? -1 : b.averageRating;
                     return ratingB - ratingA;
                 });
 
