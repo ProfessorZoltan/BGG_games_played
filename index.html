@@ -88,10 +88,8 @@
     </div>
 
     <script>
-        // --- API URLs ---
-        const bggApiBaseUrl = 'https://bgg-games-played.vercel.app';
-        const bggPlaysUrl = `${bggApiBaseUrl}/api/bgg-plays`;
-        const bggStatsUrl = `${bggApiBaseUrl}/api/bgg-stats`;
+        // --- BGG API URL ---
+        const bggApiBaseUrl = 'https://boardgamegeek.com/xmlapi2';
 
         // --- DOM Elements ---
         const usernameInput = document.getElementById('usernameInput');
@@ -138,46 +136,62 @@
             fetchButton.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                const playsResponse = await fetch(`${bggPlaysUrl}?username=${username}&startDate=${startDate}&endDate=${endDate}`);
+                // Fetch plays from the BGG API (XML format)
+                const playsResponse = await fetch(`${bggApiBaseUrl}/plays?username=${username}&mindate=${startDate}&maxdate=${endDate}`);
                 
-                // Get the text from the response first to check for non-JSON content
-                const playsResponseText = await playsResponse.text();
-
                 if (!playsResponse.ok) {
-                    throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}. Response content: ${playsResponseText}`);
+                    throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}.`);
                 }
 
-                let playsData;
-                try {
-                    playsData = JSON.parse(playsResponseText);
-                } catch (e) {
-                    throw new Error(`Failed to parse JSON response from server. Response content: "${playsResponseText}"`);
+                // Parse XML response
+                const parser = new DOMParser();
+                const xmlPlaysDoc = parser.parseFromString(await playsResponse.text(), 'text/xml');
+                
+                // Check for API errors or no plays found
+                const errorElement = xmlPlaysDoc.querySelector('error');
+                if (errorElement) {
+                    throw new Error(`BGG API Error: ${errorElement.getAttribute('message')}`);
                 }
-
-                if (!playsData.gameIds || playsData.gameIds.length === 0) {
+                const plays = xmlPlaysDoc.querySelectorAll('play');
+                if (plays.length === 0) {
                     showMessage(`No plays found for "${username}" between ${startDate} and ${endDate}.`, false);
                     gamesTableBody.innerHTML = '';
                     return;
                 }
 
-                // Fetch stats for each game
-                const statsPromises = playsData.gameIds.map(game => {
-                    return fetch(`${bggStatsUrl}?gameId=${game.gameId}`)
-                        .then(response => {
-                            if (!response.ok) {
-                                console.error(`Failed to fetch stats for game ID ${game.gameId}`);
-                                return null;
-                            }
-                            return response.json();
-                        })
-                        .then(data => ({ ...data, playCount: game.playCount }))
-                        .catch(err => {
-                            console.error(`Error fetching stats for game ID ${game.gameId}:`, err);
-                            return null;
-                        });
+                // Aggregate play counts by game ID
+                const gamePlays = new Map();
+                plays.forEach(play => {
+                    const gameId = play.querySelector('item').getAttribute('objectid');
+                    gamePlays.set(gameId, (gamePlays.get(gameId) || 0) + 1);
                 });
 
-                const allGames = (await Promise.all(statsPromises)).filter(game => game !== null);
+                // Fetch stats for all unique games in a single call (BGG API best practice)
+                const gameIds = [...gamePlays.keys()];
+                const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${gameIds.join(',')}&stats=1`);
+
+                if (!statsResponse.ok) {
+                    throw new Error(`Server returned an error: ${statsResponse.status} ${statsResponse.statusText}.`);
+                }
+
+                const xmlStatsDoc = parser.parseFromString(await statsResponse.text(), 'text/xml');
+                const statsItems = xmlStatsDoc.querySelectorAll('item');
+
+                const allGames = [];
+                statsItems.forEach(item => {
+                    const gameId = item.getAttribute('id');
+                    const name = item.querySelector('name').getAttribute('value');
+                    const playCount = gamePlays.get(gameId) || 0;
+                    const ownedCount = item.querySelector('status') ? item.querySelector('status').getAttribute('owned') : 'N/A';
+                    const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
+
+                    allGames.push({
+                        name,
+                        playCount,
+                        ownedCount,
+                        averageRating
+                    });
+                });
                 
                 // Sort by play count, descending
                 allGames.sort((a, b) => b.playCount - a.playCount);
