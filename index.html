@@ -229,8 +229,13 @@
 
                 const gamePlays = new Map();
                 allPlays.forEach(play => {
-                    const gameId = play.querySelector('item').getAttribute('objectid');
-                    gamePlays.set(gameId, (gamePlays.get(gameId) || 0) + 1);
+                    const item = play.querySelector('item');
+                    if (item) {
+                      const gameId = item.getAttribute('objectid');
+                      if (gameId) {
+                        gamePlays.set(gameId, (gamePlays.get(gameId) || 0) + 1);
+                      }
+                    }
                 });
 
                 showMessage(`Found ${allPlays.length} total plays. Now fetching game statistics...`, false);
