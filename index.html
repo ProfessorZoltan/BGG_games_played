@@ -218,7 +218,7 @@
                             await sleep(500);
                         }
                     } while (hasMore);
-                    await sleep(2000); // Wait 2 seconds between monthly fetches
+                    await sleep(5000); // Increased sleep between monthly fetches
                 }
 
                 if (allPlays.length === 0) {
@@ -270,8 +270,9 @@
                     
                     while (retries < maxRetries && !success) {
                         try {
+                            const cacheBuster = `&cb=${new Date().getTime()}`;
                             console.log(`Fetching stats for chunk ${i/chunkSize + 1} of ${Math.ceil(gameIds.length/chunkSize)}...`);
-                            const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${chunk.join(',')}&stats=1`);
+                            const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${chunk.join(',')}&stats=1${cacheBuster}`);
 
                             if (!statsResponse.ok) {
                                 throw new Error(`Server returned an error: ${statsResponse.status} ${statsResponse.statusText}.`);
@@ -314,7 +315,7 @@
                     }
                     
                     // Add a delay between each chunked request
-                    await sleep(6000); // Wait 6 seconds between stat chunks
+                    await sleep(15000); // Increased sleep between stat chunks
                 }
 
                 const allGames = [...gameData.values()];
