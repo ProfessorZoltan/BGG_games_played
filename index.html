@@ -164,7 +164,6 @@
                 let page = 1;
                 let totalPlays = 0;
                 let hasMore = true;
-                const maxPages = 10; // Safety limit to prevent infinite loops
                 const parser = new DOMParser();
                 
                 // Use a do-while loop to fetch all pages of plays
@@ -193,7 +192,7 @@
                         totalPlays = allPlays.length;
                     }
 
-                    hasMore = allPlays.length < totalPlays && page < maxPages;
+                    hasMore = allPlays.length < totalPlays;
                     page++;
 
                     // Add a small delay to prevent rate limiting
@@ -216,46 +215,50 @@
                 });
 
                 const gameIds = [...gamePlays.keys()];
-                
-                // Add a longer delay before fetching stats for a large number of games
-                await sleep(1000);
-
-                const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${gameIds.join(',')}&stats=1`);
-
-                if (!statsResponse.ok) {
-                    throw new Error(`Server returned an error: ${statsResponse.status} ${statsResponse.statusText}.`);
-                }
-
-                const xmlStatsDoc = parser.parseFromString(await statsResponse.text(), 'text/xml');
-                const statsItems = xmlStatsDoc.querySelectorAll('item');
-
                 const allGames = [];
                 let minOwnedCount = Infinity;
+                const chunkSize = 50;
+                
+                // Fetch game stats in chunks to avoid API rate limits and URL length limits
+                for (let i = 0; i < gameIds.length; i += chunkSize) {
+                    const chunk = gameIds.slice(i, i + chunkSize);
+                    const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${chunk.join(',')}&stats=1`);
 
-                statsItems.forEach(item => {
-                    const gameId = item.getAttribute('id');
-                    const name = item.querySelector('name').getAttribute('value');
-                    const playCount = gamePlays.get(gameId) || 0;
-                    
-                    const ownedElement = item.querySelector('statistics > ratings > owned');
-                    let ownedCount = 'N/A';
-                    if (ownedElement) {
-                        ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
-                    }
-                    
-                    const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
-                    
-                    if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
-                        minOwnedCount = ownedCount;
+                    if (!statsResponse.ok) {
+                        throw new Error(`Server returned an error: ${statsResponse.status} ${statsResponse.statusText}.`);
                     }
 
-                    allGames.push({
-                        name,
-                        playCount,
-                        ownedCount,
-                        averageRating
+                    const xmlStatsDoc = parser.parseFromString(await statsResponse.text(), 'text/xml');
+                    const statsItems = xmlStatsDoc.querySelectorAll('item');
+
+                    statsItems.forEach(item => {
+                        const gameId = item.getAttribute('id');
+                        const name = item.querySelector('name').getAttribute('value');
+                        const playCount = gamePlays.get(gameId) || 0;
+                        
+                        const ownedElement = item.querySelector('statistics > ratings > owned');
+                        let ownedCount = 'N/A';
+                        if (ownedElement) {
+                            ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
+                        }
+                        
+                        const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
+                        
+                        if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
+                            minOwnedCount = ownedCount;
+                        }
+
+                        allGames.push({
+                            name,
+                            playCount,
+                            ownedCount,
+                            averageRating
+                        });
                     });
-                });
+                    
+                    // Add a delay between each chunked request
+                    await sleep(500);
+                }
                 
                 // Sort by average rating, descending (highest to lowest)
                 allGames.sort((a, b) => {
