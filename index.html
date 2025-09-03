@@ -38,7 +38,7 @@
                 <input id="usernameInput" type="text" placeholder="BGG Username"
                        class="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
                 <input id="startDateInput" type="date"
-                       class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                       class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus-ring-blue-500 transition-all">
                 <input id="endDateInput" type="date"
                        class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
             </div>
@@ -256,59 +256,100 @@
                     return;
                 }
 
-                showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique games. Now fetching game statistics one-by-one...`, false);
+                showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique games. Now fetching game statistics...`, false);
                 
                 let minOwnedCount = Infinity;
-                
-                for (const gameId of gameIds) {
+                const chunkSize = 50;
+
+                // Attempt to fetch game stats in chunks first
+                for (let i = 0; i < gameIds.length; i += chunkSize) {
+                    const chunk = gameIds.slice(i, i + chunkSize);
                     let retries = 0;
                     const maxRetries = 3;
                     let success = false;
-
+                    
                     while (retries < maxRetries && !success) {
                         try {
                             const cacheBuster = `&cb=${new Date().getTime()}`;
-                            console.log(`Fetching stats for game ID: ${gameId}`);
-                            const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${gameId}&stats=1${cacheBuster}`);
-                            
+                            console.log(`Fetching stats for chunk ${i/chunkSize + 1} of ${Math.ceil(gameIds.length/chunkSize)}...`);
+                            const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${chunk.join(',')}&stats=1${cacheBuster}`);
+
                             if (!statsResponse.ok) {
                                 throw new Error(`Server returned an error: ${statsResponse.status} ${statsResponse.statusText}.`);
                             }
 
                             const xmlStatsDoc = parser.parseFromString(await statsResponse.text(), 'text/xml');
-                            const item = xmlStatsDoc.querySelector('item');
+                            const statsItems = xmlStatsDoc.querySelectorAll('item');
 
-                            if (item) {
-                                const currentData = gameData.get(gameId);
-                                
-                                const ownedElement = item.querySelector('statistics > ratings > owned');
-                                let ownedCount = 'N/A';
-                                if (ownedElement) {
-                                    ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
-                                }
-                                
-                                const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
-                                
-                                currentData.ownedCount = ownedCount;
-                                currentData.averageRating = averageRating;
+                            statsItems.forEach(item => {
+                                const gameId = item.getAttribute('id');
+                                if (gameData.has(gameId)) {
+                                    const currentData = gameData.get(gameId);
+                                    
+                                    const ownedElement = item.querySelector('statistics > ratings > owned');
+                                    let ownedCount = 'N/A';
+                                    if (ownedElement) {
+                                        ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
+                                    }
+                                    
+                                    const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
+                                    
+                                    currentData.ownedCount = ownedCount;
+                                    currentData.averageRating = averageRating;
 
-                                if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
-                                    minOwnedCount = ownedCount;
+                                    if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
+                                        minOwnedCount = ownedCount;
+                                    }
                                 }
-                            }
+                            });
                             success = true;
                         } catch (error) {
                             retries++;
-                            console.error(`Attempt ${retries} failed for game ID ${gameId}. Retrying in 10 seconds...`, error);
+                            console.error(`Attempt ${retries} failed for chunk. Retrying in 10 seconds...`, error);
                             if (retries < maxRetries) {
                                 await sleep(10000); // Wait 10 seconds before retrying
                             } else {
-                                console.error(`Failed to fetch stats for game ID ${gameId} after ${maxRetries} retries. Skipping.`);
+                                console.error(`Failed to fetch stats for chunk after ${maxRetries} retries. Falling back to single-game fetching for this chunk.`);
+                                // Fallback to fetching games one-by-one for this failed chunk
+                                for (const individualGameId of chunk) {
+                                     let singleGameRetries = 0;
+                                     let singleGameSuccess = false;
+                                     while(singleGameRetries < maxRetries && !singleGameSuccess) {
+                                        try {
+                                             const singleStatsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${individualGameId}&stats=1&cb=${new Date().getTime()}`);
+                                             if (!singleStatsResponse.ok) {
+                                                 throw new Error(`Server returned an error: ${singleStatsResponse.status} ${singleStatsResponse.statusText}.`);
+                                             }
+                                             const singleXmlStatsDoc = parser.parseFromString(await singleStatsResponse.text(), 'text/xml');
+                                             const singleItem = singleXmlStatsDoc.querySelector('item');
+                                             if (singleItem) {
+                                                 const currentData = gameData.get(individualGameId);
+                                                 const ownedElement = singleItem.querySelector('statistics > ratings > owned');
+                                                 let ownedCount = ownedElement ? parseInt(ownedElement.getAttribute('value'), 10) : 'N/A';
+                                                 const averageRating = singleItem.querySelector('statistics>ratings>average') ? parseFloat(singleItem.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
+                                                 currentData.ownedCount = ownedCount;
+                                                 currentData.averageRating = averageRating;
+                                                 if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
+                                                     minOwnedCount = ownedCount;
+                                                 }
+                                             }
+                                             singleGameSuccess = true;
+                                        } catch (singleError) {
+                                             singleGameRetries++;
+                                             console.error(`Attempt ${singleGameRetries} failed for game ID ${individualGameId} in fallback. Retrying in 5 seconds...`, singleError);
+                                             if (singleGameRetries < maxRetries) {
+                                                 await sleep(5000);
+                                             }
+                                        }
+                                     }
+                                }
+                                success = true; // Mark chunk as "handled" to exit the while loop
                             }
                         }
                     }
                     
-                    await sleep(2000); // Small delay between individual requests
+                    // Add a delay between each chunked request or after the fallback
+                    await sleep(15000); 
                 }
 
                 const allGames = [...gameData.values()];
