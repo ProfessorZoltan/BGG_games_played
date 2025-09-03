@@ -227,18 +227,29 @@
                     return;
                 }
 
-                const gamePlays = new Map();
+                const gameData = new Map();
                 allPlays.forEach(play => {
                     const item = play.querySelector('item');
                     if (item) {
                       const gameId = item.getAttribute('objectid');
                       if (gameId) {
-                        gamePlays.set(gameId, (gamePlays.get(gameId) || 0) + 1);
+                        const gameName = item.getAttribute('name');
+                        if (!gameData.has(gameId)) {
+                            gameData.set(gameId, {
+                                id: gameId,
+                                name: gameName,
+                                playCount: 0,
+                                ownedCount: 'N/A',
+                                averageRating: 'N/A'
+                            });
+                        }
+                        const currentData = gameData.get(gameId);
+                        currentData.playCount += 1;
                       }
                     }
                 });
 
-                const gameIds = [...gamePlays.keys()];
+                const gameIds = [...gameData.keys()];
                 if (gameIds.length === 0) {
                     showMessage(`Found ${allPlays.length} total plays, but none were associated with a specific game. This can happen if plays were logged without a game name.`, false);
                     gamesTableBody.innerHTML = '';
@@ -246,7 +257,7 @@
                 }
 
                 showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique games. Now fetching game statistics...`, false);
-                const allGames = [];
+                
                 let minOwnedCount = Infinity;
                 const chunkSize = 50;
                 
@@ -271,27 +282,24 @@
 
                             statsItems.forEach(item => {
                                 const gameId = item.getAttribute('id');
-                                const name = item.querySelector('name').getAttribute('value');
-                                const playCount = gamePlays.get(gameId) || 0;
-                                
-                                const ownedElement = item.querySelector('statistics > ratings > owned');
-                                let ownedCount = 'N/A';
-                                if (ownedElement) {
-                                    ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
-                                }
-                                
-                                const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
-                                
-                                if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
-                                    minOwnedCount = ownedCount;
-                                }
+                                if (gameData.has(gameId)) {
+                                    const currentData = gameData.get(gameId);
+                                    
+                                    const ownedElement = item.querySelector('statistics > ratings > owned');
+                                    let ownedCount = 'N/A';
+                                    if (ownedElement) {
+                                        ownedCount = parseInt(ownedElement.getAttribute('value'), 10);
+                                    }
+                                    
+                                    const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
+                                    
+                                    currentData.ownedCount = ownedCount;
+                                    currentData.averageRating = averageRating;
 
-                                allGames.push({
-                                    name,
-                                    playCount,
-                                    ownedCount,
-                                    averageRating
-                                });
+                                    if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
+                                        minOwnedCount = ownedCount;
+                                    }
+                                }
                             });
                             success = true;
                         } catch (error) {
@@ -309,7 +317,7 @@
                     await sleep(6000); // Wait 6 seconds between stat chunks
                 }
 
-                // Removed the check for allGames.length and gameIds.length to allow for partial results.
+                const allGames = [...gameData.values()];
                 
                 // Sort by average rating, descending (highest to lowest)
                 allGames.sort((a, b) => {
@@ -318,18 +326,14 @@
                     return ratingB - ratingA;
                 });
                 
-                if (allGames.length > 0) {
-                    renderResults(allGames, minOwnedCount);
-                    // Check if some games were missing data
-                    if (allGames.length < gameIds.length) {
-                         const missingCount = gameIds.length - allGames.length;
-                         showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}. ${missingCount} game(s) were found, but no statistics were available.`, false);
-                    } else {
-                        showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
-                    }
+                renderResults(allGames, minOwnedCount);
+
+                const gamesWithStats = allGames.filter(game => game.ownedCount !== 'N/A');
+                const missingCount = allGames.length - gamesWithStats.length;
+                if (missingCount > 0) {
+                    showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}". Game statistics were found for ${gamesWithStats.length} games. Statistics for ${missingCount} game(s) were not available.`, false);
                 } else {
-                    showMessage(`Found ${allPlays.length} total plays, but we were unable to retrieve statistics for any of the ${gameIds.length} unique games.`, false);
-                    gamesTableBody.innerHTML = '';
+                    showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}".`, false);
                 }
 
             } catch (error) {
@@ -348,17 +352,21 @@
                 const row = document.createElement('tr');
                 let rowClasses = 'hover:bg-gray-50 transition-colors';
                 
-                if (game.ownedCount === minOwnedCount) {
+                if (game.ownedCount !== 'N/A' && game.ownedCount === minOwnedCount) {
                     rowClasses += ' bg-yellow-200';
                 }
 
                 row.className = rowClasses;
 
+                const ownedCountText = game.ownedCount !== 'N/A' ? game.ownedCount.toLocaleString() : 'N/A';
+                const averageRatingText = game.averageRating !== 'N/A' ? game.averageRating.toFixed(2) : 'N/A';
+                const tooltipTitle = game.ownedCount === 'N/A' ? 'title="Statistics not found for this game ID. It may not exist in the database."' : '';
+
                 row.innerHTML = `
                     <td class="px-4 py-3 font-medium text-gray-900 truncate">${game.name}</td>
                     <td class="px-4 py-3 text-center text-gray-700">${game.playCount}</td>
-                    <td class="px-4 py-3 text-center text-gray-700">${game.ownedCount !== 'N/A' ? game.ownedCount.toLocaleString() : 'N/A'}</td>
-                    <td class="px-4 py-3 text-center text-gray-700">${game.averageRating !== 'N/A' ? game.averageRating.toFixed(2) : 'N/A'}</td>
+                    <td class="px-4 py-3 text-center text-gray-700" ${tooltipTitle}>${ownedCountText}</td>
+                    <td class="px-4 py-3 text-center text-gray-700" ${tooltipTitle}>${averageRatingText}</td>
                 `;
                 gamesTableBody.appendChild(row);
             });
