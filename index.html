@@ -242,6 +242,7 @@
                 // Fetch game stats in chunks to avoid API rate limits and URL length limits
                 for (let i = 0; i < gameIds.length; i += chunkSize) {
                     const chunk = gameIds.slice(i, i + chunkSize);
+                    console.log(`Fetching stats for chunk ${i/chunkSize + 1} of ${Math.ceil(gameIds.length/chunkSize)}...`);
                     const statsResponse = await fetch(`${bggApiBaseUrl}/thing?id=${chunk.join(',')}&stats=1`);
 
                     if (!statsResponse.ok) {
@@ -277,7 +278,7 @@
                     });
                     
                     // Add a delay between each chunked request
-                    await sleep(2000); // Wait 2 seconds between stat chunks
+                    await sleep(4000); // Wait 4 seconds between stat chunks
                 }
                 
                 // Sort by average rating, descending (highest to lowest)
