@@ -238,8 +238,14 @@
                     }
                 });
 
-                showMessage(`Found ${allPlays.length} total plays. Now fetching game statistics...`, false);
                 const gameIds = [...gamePlays.keys()];
+                if (gameIds.length === 0) {
+                    showMessage(`Found ${allPlays.length} total plays, but none were associated with a specific game. This may happen if plays were logged without a game name.`, false);
+                    gamesTableBody.innerHTML = '';
+                    return;
+                }
+
+                showMessage(`Found ${allPlays.length} total plays. Now fetching game statistics...`, false);
                 const allGames = [];
                 let minOwnedCount = Infinity;
                 const chunkSize = 50;
@@ -306,7 +312,7 @@
                 // Sort by average rating, descending (highest to lowest)
                 allGames.sort((a, b) => {
                     const ratingA = a.averageRating === 'N/A' ? -1 : a.averageRating;
-                    const ratingB = b.averageRating === 'N/A' ? -1 : b.averageRating;
+                    const ratingB = b.averageRating === 'N/A' ? -1 : a.averageRating;
                     return ratingB - ratingA;
                 });
 
