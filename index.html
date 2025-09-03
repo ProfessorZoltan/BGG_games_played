@@ -1,0 +1,207 @@
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'bgg-green': '#3B5998',
+                    'bgg-gray': '#F2F2F2',
+                },
+                fontFamily: {
+                    sans: ['Inter', 'sans-serif'],
+                },
+            }
+        }
+    }
+</script>
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+
+    .container {
+        max-width: 900px;
+    }
+
+    .game-card {
+        transition: transform 0.2s;
+    }
+
+    .game-card:hover {
+        transform: translateY(-5px);
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .spinner {
+        animation: spin 1s linear infinite;
+    }
+</style>
+
+<div class="bg-bgg-gray min-h-screen p-8 flex items-center justify-center">
+    <div class="container bg-white rounded-xl shadow-2xl p-6 md:p-10 text-gray-800">
+        <h1 class="text-3xl font-bold text-center text-bgg-green mb-6">BGG Games Played</h1>
+        <p class="text-center text-sm text-gray-600 mb-8">
+            Find the games you played last month that are owned by the fewest people.
+        </p>
+
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700">BGG Username</label>
+                    <input type="text" id="username"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-bgg-green focus:ring-bgg-green p-2"
+                        placeholder="e.g., IncurableHam">
+                </div>
+                <div>
+                    <label for="startDate" class="block text-sm font-medium text-gray-700">Start Date</label>
+                    <input type="date" id="startDate"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-bgg-green focus:ring-bgg-green p-2">
+                </div>
+                <div>
+                    <label for="endDate" class="block text-sm font-medium text-gray-700">End Date</label>
+                    <input type="date" id="endDate"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-bgg-green focus:ring-bgg-green p-2">
+                </div>
+            </div>
+
+            <div class="flex justify-center mt-6">
+                <button onclick="fetchStats()"
+                    class="w-full md:w-auto px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-bgg-green hover:bg-bgg-green-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-bgg-green transition ease-in-out duration-150">
+                    Fetch Games Played
+                </button>
+            </div>
+        </div>
+
+        <div id="results" class="mt-8">
+            <div id="message" class="text-center font-medium text-gray-600"></div>
+            <div id="loading" class="text-center mt-4 hidden">
+                <i class="fas fa-spinner fa-spin text-bgg-green text-3xl"></i>
+                <p class="mt-2 text-gray-500">Working on it...</p>
+            </div>
+            <div id="gameList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = new Date();
+        const firstDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+
+        const formatDate = (date) => date.toISOString().split('T')[0];
+
+        document.getElementById('startDate').value = formatDate(firstDayOfPreviousMonth);
+        document.getElementById('endDate').value = formatDate(lastDayOfPreviousMonth);
+    });
+
+    async function fetchStats() {
+        const username = document.getElementById('username').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const messageDiv = document.getElementById('message');
+        const loadingDiv = document.getElementById('loading');
+        const gameListDiv = document.getElementById('gameList');
+
+        messageDiv.textContent = '';
+        gameListDiv.innerHTML = '';
+        loadingDiv.classList.remove('hidden');
+
+        if (!username || !startDate || !endDate) {
+            messageDiv.textContent = 'Please fill out all fields.';
+            loadingDiv.classList.add('hidden');
+            return;
+        }
+
+        try {
+            messageDiv.textContent = 'Fetching your play history from BGG...';
+            const playsResponse = await fetch(`http://localhost:3000/api/bgg-plays?username=${username}&startDate=${startDate}&endDate=${endDate}`);
+            const playsData = await playsResponse.json();
+
+            if (!playsResponse.ok) {
+                throw new Error(playsData.error || 'Failed to fetch play history');
+            }
+
+            if (!playsData.gameIds || playsData.gameIds.length === 0) {
+                messageDiv.textContent = 'No games found for the specified period.';
+                loadingDiv.classList.add('hidden');
+                return;
+            }
+
+            messageDiv.textContent = 'Found plays. Fetching game statistics...';
+            const gamesWithStats = await Promise.all(playsData.gameIds.map(async (play) => {
+                const statsResponse = await fetch(`http://localhost:3000/api/bgg-stats?gameId=${play.gameId}`);
+                const statsData = await statsResponse.json();
+
+                if (!statsResponse.ok) {
+                    throw new Error(statsData.error || `Failed to fetch stats for game ID ${play.gameId}`);
+                }
+
+                return {
+                    id: play.gameId,
+                    playCount: play.playCount,
+                    name: statsData.name,
+                    ownedCount: statsData.ownedCount,
+                    averageRating: statsData.averageRating
+                };
+            }));
+
+            // Sort by average rating, descending
+            gamesWithStats.sort((a, b) => b.averageRating - a.averageRating);
+
+            loadingDiv.classList.add('hidden');
+            messageDiv.textContent = `Found stats for ${gamesWithStats.length} games.`;
+
+            displayGames(gamesWithStats);
+
+        } catch (error) {
+            loadingDiv.classList.add('hidden');
+            messageDiv.textContent = `Proxy Error: ${error.message}`;
+            console.error('Error in fetchStats:', error);
+        }
+    }
+
+    function displayGames(games) {
+        const gameListDiv = document.getElementById('gameList');
+        gameListDiv.innerHTML = '';
+
+        if (games.length === 0) {
+            gameListDiv.innerHTML = '<p class="text-center text-gray-500">No results to display.</p>';
+            return;
+        }
+
+        const leastOwnedGame = games.reduce((prev, current) => {
+            return (prev.ownedCount < current.ownedCount) ? prev : current;
+        });
+
+        games.forEach(game => {
+            const gameCard = document.createElement('div');
+            let highlightClass = '';
+            if (game.id === leastOwnedGame.id) {
+                highlightClass = 'border-4 border-yellow-400 bg-yellow-100 relative';
+            }
+
+            gameCard.className = `game-card bg-white rounded-lg shadow-md p-4 flex flex-col items-center text-center ${highlightClass}`;
+            gameCard.innerHTML = `
+                ${game.id === leastOwnedGame.id ? '<div class="absolute top-0 right-0 -mt-2 -mr-2 px-2 py-1 bg-yellow-400 text-white rounded-full text-xs font-bold shadow-lg">🏆 Least Owned</div>' : ''}
+                <a href="https://boardgamegeek.com/boardgame/${game.id}" target="_blank" class="text-lg font-semibold text-bgg-green hover:underline">${game.name}</a>
+                <div class="mt-2 text-sm text-gray-600">
+                    <p><strong>Your Plays:</strong> ${game.playCount}</p>
+                    <p><strong>Owned By:</strong> ${game.ownedCount}</p>
+                    <p><strong>Avg. Rating:</strong> ${game.averageRating ? game.averageRating.toFixed(2) : 'N/A'}</p>
+                </div>
+            `;
+            gameListDiv.appendChild(gameCard);
+        });
+    }
+</script>
