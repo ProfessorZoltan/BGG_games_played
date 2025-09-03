@@ -200,7 +200,8 @@
                     const gameId = item.getAttribute('id');
                     const name = item.querySelector('name').getAttribute('value');
                     const playCount = gamePlays.get(gameId) || 0;
-                    const ownedCount = item.querySelector('status') ? parseInt(item.querySelector('status').getAttribute('owned')) : 'N/A';
+                    // Correctly get 'owned' from the <ratings> element under <statistics>
+                    const ownedCount = item.querySelector('statistics>ratings') ? parseInt(item.querySelector('statistics>ratings').getAttribute('owned')) : 'N/A';
                     const averageRating = item.querySelector('statistics>ratings>average') ? parseFloat(item.querySelector('statistics>ratings>average').getAttribute('value')) : 'N/A';
                     
                     if (ownedCount !== 'N/A' && ownedCount < minOwnedCount) {
