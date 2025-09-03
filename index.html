@@ -163,6 +163,7 @@
                 const pageSize = 100;
                 let hasMore = true;
                 const maxPages = 10; // Safety limit to prevent infinite loops
+                const parser = new DOMParser();
 
                 // Use a do-while loop to fetch all pages of plays
                 do {
@@ -172,7 +173,6 @@
                         throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}.`);
                     }
 
-                    const parser = new DOMParser();
                     const xmlPlaysDoc = parser.parseFromString(await playsResponse.text(), 'text/xml');
                     
                     const errorElement = xmlPlaysDoc.querySelector('error');
@@ -254,7 +254,7 @@
                 });
 
                 renderResults(allGames, minOwnedCount);
-                showMessage(`Found ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
+                showMessage(`Found ${allPlays.length} total plays for ${allGames.length} unique games played by "${username}" between ${startDate} and ${endDate}.`, false);
 
             } catch (error) {
                 console.error('Fetch error:', error);
