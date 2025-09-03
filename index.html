@@ -309,9 +309,9 @@
                     await sleep(6000); // Wait 6 seconds between stat chunks
                 }
 
-                if (allGames.length === 0) {
-                    showModal('Game Data Missing', 'We found plays for this time period, but the BoardGameGeek API did not return game statistics for any of them. The games may no longer exist in the database.');
-                    showMessage('Completed fetching. No game data available to display.', false);
+                if (allGames.length === 0 && gameIds.length > 0) {
+                    showMessage(`Found ${allPlays.length} total plays for ${gameIds.length} unique game IDs, but no game statistics were returned by the BGG API. The games may no longer exist in the database.`, false);
+                    gamesTableBody.innerHTML = '';
                     return;
                 }
                 
