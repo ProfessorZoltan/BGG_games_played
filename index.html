@@ -197,7 +197,7 @@
 
                     // Add a small delay to prevent rate limiting
                     if (hasMore) {
-                        await sleep(200);
+                        await sleep(500); // Increased delay
                     }
                     
                 } while (hasMore);
@@ -214,6 +214,7 @@
                     gamePlays.set(gameId, (gamePlays.get(gameId) || 0) + 1);
                 });
 
+                showMessage(`Found ${allPlays.length} total plays. Now fetching game statistics...`, false);
                 const gameIds = [...gamePlays.keys()];
                 const allGames = [];
                 let minOwnedCount = Infinity;
@@ -257,7 +258,7 @@
                     });
                     
                     // Add a delay between each chunked request
-                    await sleep(500);
+                    await sleep(1000); // Increased delay
                 }
                 
                 // Sort by average rating, descending (highest to lowest)
