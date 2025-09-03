@@ -143,6 +143,31 @@
             modalMessage.textContent = message;
             modal.classList.remove('hidden');
         }
+        
+        function getMonthsBetweenDates(start, end) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            const months = [];
+            const currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+
+            while (currentDate <= endDate) {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+                const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`;
+                
+                months.push({ start: firstDay, end: lastDay });
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+            
+            // Adjust the first and last month to the user's selected dates
+            if (months.length > 0) {
+                months[0].start = start;
+                months[months.length - 1].end = end;
+            }
+            
+            return months;
+        }
 
         async function fetchGames() {
             const username = usernameInput.value.trim();
@@ -160,48 +185,42 @@
             fetchButton.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                let allPlays = [];
-                let page = 1;
-                let totalPlays = 0;
-                let hasMore = true;
+                const allPlays = [];
                 const parser = new DOMParser();
+                const months = getMonthsBetweenDates(startDate, endDate);
                 
-                // Use a do-while loop to fetch all pages of plays
-                do {
-                    const playsResponse = await fetch(`${bggApiBaseUrl}/plays?username=${username}&mindate=${startDate}&maxdate=${endDate}&page=${page}`);
+                for (const month of months) {
+                    showMessage(`Fetching plays for ${month.start.substring(0, 7)}...`, false);
+                    let page = 1;
+                    let hasMore = true;
                     
-                    if (!playsResponse.ok) {
-                        throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}.`);
-                    }
+                    do {
+                        const playsResponse = await fetch(`${bggApiBaseUrl}/plays?username=${username}&mindate=${month.start}&maxdate=${month.end}&page=${page}`);
+                        
+                        if (!playsResponse.ok) {
+                            throw new Error(`Server returned an error: ${playsResponse.status} ${playsResponse.statusText}.`);
+                        }
 
-                    const xmlPlaysDoc = parser.parseFromString(await playsResponse.text(), 'text/xml');
-                    
-                    const errorElement = xmlPlaysDoc.querySelector('error');
-                    if (errorElement) {
-                        throw new Error(`BGG API Error: ${errorElement.getAttribute('message')}`);
-                    }
-                    
-                    const plays = Array.from(xmlPlaysDoc.querySelectorAll('play'));
-                    allPlays = allPlays.concat(plays);
+                        const xmlPlaysDoc = parser.parseFromString(await playsResponse.text(), 'text/xml');
+                        
+                        const errorElement = xmlPlaysDoc.querySelector('error');
+                        if (errorElement) {
+                            throw new Error(`BGG API Error: ${errorElement.getAttribute('message')}`);
+                        }
+                        
+                        const plays = Array.from(xmlPlaysDoc.querySelectorAll('play'));
+                        allPlays.push(...plays);
+                        
+                        hasMore = plays.length > 0 && plays.length === 100; // BGG API returns 100 plays per page
+                        page++;
 
-                    const totalPlaysAttr = xmlPlaysDoc.querySelector('plays')?.getAttribute('total');
-                    if (totalPlaysAttr) {
-                        totalPlays = parseInt(totalPlaysAttr, 10);
-                    } else {
-                        // If no total attribute, assume only one page
-                        totalPlays = allPlays.length;
-                    }
+                        if (hasMore) {
+                            await sleep(500);
+                        }
+                    } while (hasMore);
+                    await sleep(2000); // Wait 2 seconds between monthly fetches
+                }
 
-                    hasMore = allPlays.length < totalPlays;
-                    page++;
-
-                    // Add a delay to prevent rate limiting
-                    if (hasMore) {
-                        await sleep(6000); // Increased delay
-                    }
-                    
-                } while (hasMore);
-                
                 if (allPlays.length === 0) {
                     showMessage(`No plays found for "${username}" between ${startDate} and ${endDate}.`, false);
                     gamesTableBody.innerHTML = '';
@@ -258,7 +277,7 @@
                     });
                     
                     // Add a delay between each chunked request
-                    await sleep(6000); // Increased delay
+                    await sleep(2000); // Wait 2 seconds between stat chunks
                 }
                 
                 // Sort by average rating, descending (highest to lowest)
