@@ -195,9 +195,9 @@
                     hasMore = allPlays.length < totalPlays;
                     page++;
 
-                    // Add a small delay to prevent rate limiting
+                    // Add a delay to prevent rate limiting
                     if (hasMore) {
-                        await sleep(500); // Increased delay
+                        await sleep(6000); // Increased delay
                     }
                     
                 } while (hasMore);
@@ -258,7 +258,7 @@
                     });
                     
                     // Add a delay between each chunked request
-                    await sleep(1000); // Increased delay
+                    await sleep(6000); // Increased delay
                 }
                 
                 // Sort by average rating, descending (highest to lowest)
