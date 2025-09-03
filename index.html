@@ -125,7 +125,8 @@
 
         try {
             messageDiv.textContent = 'Fetching your play history from BGG...';
-            const playsResponse = await fetch(`http://localhost:3000/api/bgg-plays?username=${username}&startDate=${startDate}&endDate=${endDate}`);
+            // Vercel URL is now being used here.
+            const playsResponse = await fetch(`https://bgg-games-played.vercel.app/api/bgg-plays?username=${username}&startDate=${startDate}&endDate=${endDate}`);
             const playsData = await playsResponse.json();
 
             if (!playsResponse.ok) {
@@ -140,7 +141,8 @@
 
             messageDiv.textContent = 'Found plays. Fetching game statistics...';
             const gamesWithStats = await Promise.all(playsData.gameIds.map(async (play) => {
-                const statsResponse = await fetch(`http://localhost:3000/api/bgg-stats?gameId=${play.gameId}`);
+                // Vercel URL is now being used here.
+                const statsResponse = await fetch(`https://bgg-games-played.vercel.app/api/bgg-stats?gameId=${play.gameId}`);
                 const statsData = await statsResponse.json();
 
                 if (!statsResponse.ok) {
@@ -190,7 +192,7 @@
             if (game.id === leastOwnedGame.id) {
                 highlightClass = 'border-4 border-yellow-400 bg-yellow-100 relative';
             }
-
+            
             gameCard.className = `game-card bg-white rounded-lg shadow-md p-4 flex flex-col items-center text-center ${highlightClass}`;
             gameCard.innerHTML = `
                 ${game.id === leastOwnedGame.id ? '<div class="absolute top-0 right-0 -mt-2 -mr-2 px-2 py-1 bg-yellow-400 text-white rounded-full text-xs font-bold shadow-lg">🏆 Least Owned</div>' : ''}
